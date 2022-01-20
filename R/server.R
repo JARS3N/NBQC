@@ -1,4 +1,3 @@
-?
 SERVER <- function(){
 library(shiny)
 library(ggplot2)
