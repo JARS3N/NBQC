@@ -1,0 +1,100 @@
+create table NB_META (
+  file varchar(100),
+  strata text(5),
+  ord int,
+  Lot int)
+
+
+CREATE TABLE NB_DATA (
+  file varchar(100),
+  Well varchar(3),
+  pH double,
+  O2 double,
+  delta_O2 double,
+  delta_pH double,
+  fail_O2 Bool,
+  fail_pH Bool,
+  remove Bool,
+  OCR double,
+  post double,
+  pre double,
+  delta double,
+  gain double,
+  norm_gain double
+)
+### upload
+library(RMySQL)
+con <-adminKraken::con_mysql()
+RMySQL::dbWriteTable(conn=con,
+name = "nb_meta",
+value = as.data.frame(D$meta_data),
+append=T,
+row.names=F
+)
+
+RMySQL::dbWriteTable(conn=con,
+name = "nb_plate_data",
+value = 
+D$data %>% 
+mutate(.,fail_O2 = as.numeric(fail_O2),
+fail_pH = as.numeric(fail_pH),
+remove = as.numeric (remove)
+) %>% 
+as.data.frame(.),
+append=T,
+row.names=F
+)
+
+
+CREATE VIEW NB_FILE_VIEW AS
+Select
+AVERAGE(OCR) as avg_ocr,
+STD(OCR) as sd_ocr,
+100 * (STD(OCR)/AVERAGE(OCR)) as cv_ocr,
+AVERAGE(norm_gain) as avg_gain,
+STD(norm_gain) as sd_gain,
+100 * (sTd(norm_gain)/average(norm_gain)) as cv_gain,
+#count(Well where fail_O2 = TRUE) as OL_O2,
+sum(CASE WHEN fail_O2 = TRUE then 1 ELSE 0) as OL_O2
+#count(Well wher fail_PH = TRUE) as OL_PH,
+sum(CASE WHEN fail_pH = TRUE then 1 ELSE 0) as PH_O2
+count(Well where fail_PH=TRUE OR fail_O2 = TRUE) as OL_sum
+FROM NB_PLATE_DATA 
+GROUP_BY file;
+
+CREATE VIEW NB_FILE_VIEW AS
+Select
+AVG(OCR) as avg_ocr,
+STD(OCR) as sd_ocr,
+100 * (STD(OCR)/AVG(OCR)) as cv_ocr,
+AVG(norm_gain) as avg_gain,
+STD(norm_gain) as sd_gain,
+100 * (STD(norm_gain)/AVG(norm_gain)) as cv_gain,
+sum(fail_O2) as OL_O2,
+sum(fail_PH) as OL_PH,
+count((fail_PH + fail_O2) > 0) as OL_sum
+FROM NB_PLATE_DATA 
+GROUP BY file;
+
+
+
+# this won't be necessary when MySQL is updated
+CREATE VIEW NB_lot_file AS
+SELECT * from NB_file_VIEW left JOIN 
+NB_META ON NB_file_VIEW.filename = NB_META.file; 
+
+
+CREATE View NB_LOT_VIEW AS
+Select
+Lot,
+AVG(avg_OCR) as OCR_avg,
+AVG(cv_OCR) as OCR_cv,
+AVG(avg_gain) as Gain_avg,
+AVG(cv_gain) as Gain_cv,
+sum(OL_sum >2) as n_OL_greater,
+100*(sum(OL_sum)/(96*count(file))) as avg_percent_ol
+FROM
+NB_lot_file
+group by Lot;
+
+
